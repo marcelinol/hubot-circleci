@@ -74,30 +74,34 @@ getProjectsByStatus = (msg, endpoint, status, action) ->
         else if action is 'buildup'
           rescheduleBuilds(msg, projects, status)
 
-buildIsWaiting = (status) ->
+buildWaiting = (status) ->
   status == 'scheduled' || status == 'queued'
 
 # verificar se existem builds antes do build para deploy. Se houver, dar retry em todos que estão esperando
 # senão, não dá retry em nenhum
 
-shouldRetry = (msg, projects, status) ->
+shouldRetry = (msg, projects, status) -> // CONSIDERANDO QUE ELE VAI DE CIMA PARA BAIXO
+  belowHubot = false
   for project in projects
     build = project.branches[project.default_branch].recent_builds[0]  #  SE TIVER 2 BUILDS DA MESMA BRANCH, SÓ VAI PEGAR O MAIS RECENTE - IMPLEMENTAR UMA FUNÇÃO QUE VEJA SE EXISE MAIS DE UM BUILD COM STATUS QUEUED OU SCHEDULED
-    aboveTheDeploying = false
-    if 
+    if build.committer_name == 'capybot'
+      belowHubot = true
+    if belowHubot
+      buildWaiting
 
 rescheduleBuilds = (msg, projects, status) ->
+  aboveTheDeploying = false
+  shouldRetry = false
   for project in projects
     build = project.branches[project.default_branch].recent_builds[0]  #  SE TIVER 2 BUILDS DA MESMA BRANCH, SÓ VAI PEGAR O MAIS RECENTE - IMPLEMENTAR UMA FUNÇÃO QUE VEJA SE EXISE MAIS DE UM BUILD COM STATUS QUEUED OU SCHEDULED
-    aboveTheDeploying = false
-    shouldRetry = false
-    if aboveTheDeploying && buildIsWaiting(build.status)
+
+    if aboveTheDeploying && buildWaiting(build.status)
       shouldRetry =
       #  RETRY
     else if build.committer_name == 'capybot'  #  HUBOT.NAME?
       aboveTheDeploying = true
     else if build.status == 'queued' || build.status == 'scheduled'
-
+  true
 
 retryProjectsByStatus = (msg, projects, status) ->
     for project in projects
