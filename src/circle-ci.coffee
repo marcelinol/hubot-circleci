@@ -80,35 +80,38 @@ buildWaiting = (status) ->
 # verificar se existem builds antes do build para deploy. Se houver, dar retry em todos que estão esperando
 # senão, não dá retry em nenhum
 
-shouldRetry = (msg, projects, status) -> // CONSIDERANDO QUE ELE VAI DE CIMA PARA BAIXO
+shouldRetry = (projects) -> // CONSIDERANDO QUE ELE VAI DE CIMA PARA BAIXO
   belowHubot = false
   for project in projects
     build = project.branches[project.default_branch].recent_builds[0]  #  SE TIVER 2 BUILDS DA MESMA BRANCH, SÓ VAI PEGAR O MAIS RECENTE - IMPLEMENTAR UMA FUNÇÃO QUE VEJA SE EXISE MAIS DE UM BUILD COM STATUS QUEUED OU SCHEDULED
     if build.committer_name == 'capybot'
       belowHubot = true
     if belowHubot
-      buildWaiting
+      buildWaiting(build.status)
+  false
 
 rescheduleBuilds = (msg, projects, status) ->
-  aboveTheDeploying = false
-  shouldRetry = false
-  for project in projects
-    build = project.branches[project.default_branch].recent_builds[0]  #  SE TIVER 2 BUILDS DA MESMA BRANCH, SÓ VAI PEGAR O MAIS RECENTE - IMPLEMENTAR UMA FUNÇÃO QUE VEJA SE EXISE MAIS DE UM BUILD COM STATUS QUEUED OU SCHEDULED
+  if shouldRetry(projects)
+    aboveTheDeploying = false
+    for project in projects
+      build = project.branches[project.default_branch].recent_builds[0]  #  SE TIVER 2 BUILDS DA MESMA BRANCH, SÓ VAI PEGAR O MAIS RECENTE - IMPLEMENTAR UMA FUNÇÃO QUE VEJA SE EXISE MAIS DE UM BUILD COM STATUS QUEUED OU SCHEDULED
 
-    if aboveTheDeploying && buildWaiting(build.status)
-      shouldRetry =
-      #  RETRY
-    else if build.committer_name == 'capybot'  #  HUBOT.NAME?
-      aboveTheDeploying = true
-    else if build.status == 'queued' || build.status == 'scheduled'
-  true
+      if aboveTheDeploying && buildWaiting(build.status)
+        retryProject(project)
+      else if build.committer_name == 'capybot'  #  HUBOT.NAME?
+        aboveTheDeploying = true
+    false
+
+
+retryProject = (project) ->
+    build_branch = project.branches[project.default_branch]
+    last_build = build_branch.recent_builds[0]
+    project = toProject(project.reponame)
+    retryBuild(msg, endpoint, project, last_build.build_num)
 
 retryProjectsByStatus = (msg, projects, status) ->
     for project in projects
-      build_branch = project.branches[project.default_branch]
-      last_build = build_branch.recent_builds[0]
-      project = toProject(project.reponame)
-      retryBuild(msg, endpoint, project, last_build.build_num)
+      retryProject(project)
 
 listProjectsByStatus = (msg, projects, status) ->
     if projects.length is 0
